@@ -1,0 +1,172 @@
+schema: mega-review/1
+package: artdaq-core-mu2e
+tier: B
+group: artdaq-data-path
+repo:
+  # Canonical repository, where issues are routed. The superproject submodule
+  # URL is the fork git@github.com:normanajn/artdaq-core-mu2e.git (issues
+  # disabled) -- see findings ACM-006 and notes.repo_routing.
+  url: git@github.com:Mu2e/artdaq-core-mu2e.git
+  exists: true
+  issues_enabled: true
+doc_dir: doc
+summary: >
+  Mu2e artdaq fragment types, DTC and CFO packet overlays, subsystem payload
+  decoders and art event-header data products, shared by the online DAQ and
+  Offline
+languages: [cpp]
+loc: 9176
+
+runtime:
+  executables:
+    - name: artdaq-core-mu2e_Overlays
+      kind: library
+      waiver: "Tier B: man pages only for shipped executables; the interface is documented field by field in doc/INTERFACES.md and by Doxygen (doc/CMakeLists.txt)"
+    - name: artdaq-core-mu2e_Data
+      kind: library
+      waiver: "Tier B: art data-product library; documented in doc/INTERFACES.md section 9 and by Doxygen"
+    - name: artdaq-core-mu2e_BuildInfo
+      kind: library
+      waiver: "Tier B: build-stamp library, no user interface"
+    - name: Mu2e (artdaq::fragmentNameHelper plugin)
+      kind: plugin
+      waiver: "Tier B: loaded by artdaq by name, not invoked by users; registered at artdaq-core-mu2e/Overlays/CMakeLists.txt:44"
+    - name: DTC_Event_t
+      kind: cli
+      waiver: "Boost.Test unit test; installed to bin/ only because cet_test carries INSTALL_BIN (test/Overlays/CMakeLists.txt:1), not a user tool"
+    - name: DTC_SubEvent_t
+      kind: cli
+      waiver: "Boost.Test unit test; installed to bin/ only because cet_test carries INSTALL_BIN (test/Overlays/CMakeLists.txt:6), not a user tool"
+  services: []
+  ports: []
+  config_files: []
+  env_vars: []
+
+interactions:
+  # artdaq-core-mu2e depends on nothing inside mu2edaq-main. Its consumers
+  # (artdaq-mu2e, mu2e-pcie-utils, otsdaq-mu2e*) are inverted by the
+  # aggregator from their own manifests.
+  depends_on: []
+  depended_on_by: []
+  external:
+    - artdaq-core       # CMakeLists.txt:69, find_package(artdaq-core 3.09.00 REQUIRED)
+    - cetmodules        # CMakeLists.txt:11
+    - TRACE
+    - messagefacility
+    - canvas
+    - cetlib_except
+    - ROOT              # art_dictionary, Data/CMakeLists.txt:14
+    - boost-unit-test   # test/Overlays/CMakeLists.txt:1,6 (USE_BOOST_UNIT)
+
+quality:
+  tests: {present: true, framework: boost-test, count: 8}
+  ci:
+    present: true
+    workflows:
+      - .github/workflows/auto_approve.yml
+      - .github/workflows/git-whitespace.yml
+      - .github/workflows/mu2e-build-single-pkg.yml
+      - .github/workflows/mu2e-develop-cpp-ci.yml
+      - .github/workflows/mu2e-format-single-pkg.yml
+      - .github/workflows/mu2e-test-single-pkg.yml
+      - .github/workflows/mu2e-tidy-single-pkg.yml
+      - .github/workflows/track_new_issues.yml
+      - .github/workflows/track_new_prs.yml
+  license: BSD-3-Clause (Fermilab)
+  artifacts_clean: true
+
+notes:
+  doc_dir_rationale: >
+    doc/ already existed (Doxyfile.in, HTML templates, CMakeLists.txt) and is
+    wired into the Doxygen build; kept, not renamed. Doxyfile.in FILE_PATTERNS
+    includes *.md and INPUT is the repository root, so the new Markdown files
+    become Doxygen pages; README.md is the Doxygen main page
+    (USE_MDFILE_AS_MAINPAGE).
+  baseline: >
+    Reviewed at cf86c07 (9.02.00), the superproject gitlink, which is on the
+    fork normanajn/artdaq-core-mu2e: 68 commits behind and 2 ahead of
+    Mu2e/artdaq-core-mu2e develop (7ae4622, 9.07.00, 2026-10-06). Every header
+    was diffed against upstream develop with whitespace ignored and every
+    finding re-checked there. Upstream is mostly a clang-format pass. It also
+    rewrites STMFragment.hh (documented in INTERFACES.md section 7.1), fixes
+    the SetupEvent/SetupSubEvent infinite parse loops (5225ef0, 8bf66e6), and
+    drops auto_approve.yml (8 workflows on develop).
+  dropped_finding: >
+    The SetupEvent/SetupSubEvent loops that never terminate after a parse
+    exception (DTC_Event.cpp:52-56, DTC_SubEvent.cpp:201,240 at cf86c07) were
+    found at the pin, then found fixed upstream. They are not staged as an
+    issue. They are evidence in ACM-006 that the pin is stale.
+  repo_routing: >
+    Issues ACM-001..ACM-005 route to Mu2e/artdaq-core-mu2e
+    (stage_issues.py REPO_OVERRIDES). ACM-006 carries "(file this against
+    `Mu2e/mu2edaq-main`)" in its Location line.
+  dedup: >
+    gh issue list -R Mu2e/artdaq-core-mu2e --state all returned 10 issues
+    (#6 #8 #9 #20 #23 #34 #59 #65 #101 #120). None carries a mega-review
+    fingerprint, and none shares two or more significant title tokens with a
+    staged finding. Closed #65 concerned the parse loops now fixed upstream.
+  brief_corrections: >
+    The brief described test/ as "2 files, gtest, 3 add_test". Actual: two
+    cet_test targets using Boost.Test (USE_BOOST_UNIT) with 8
+    BOOST_AUTO_TEST_CASEs between them (DTC_Event_t.cc, DTC_SubEvent_t.cc),
+    plus six binary fixtures. quality.tests.count is the test-case count.
+  man_pages: >
+    No add_executable, cet_make_exec or install(PROGRAMS) in any
+    CMakeLists.txt. The only installed binaries are the two unit tests (via
+    cet_test INSTALL_BIN). All runtime entries carry waivers; no man/
+    directory was created.
+  ci_paths_ignore: >
+    The build/test workflows set paths-ignore: docs/**, but this repository's
+    documentation lives in doc/, so documentation-only commits trigger full
+    CI builds. Too minor to file.
+  cross_package: >
+    mu2edaq-dataformat-viewer re-encodes these layouts in YAML; its review
+    (DFV-001, DFV-002) found the spec and these overlays agree on the Data
+    Header, Heartbeat and Data Request layouts, and the YAML disagrees. The
+    subsystem-ID round-trip defect (ACM-001) was passed here from that review
+    and verified: DTC_DMAPacket.cpp:21 packs into word 1 [14:12],
+    DTC_DMAPacket.cpp:43 unpacks from word 2 [15:13]. Its concrete victim is
+    mu2e-pcie-utils mu2esim.cpp:842-843 and 855-856 (emulated calorimeter and
+    CRV headers).
+  disclosure: >
+    Mu2e/artdaq-core-mu2e is public. Nothing staged here is a security
+    defect, so committing ISSUES-PENDING.md discloses nothing beyond what the
+    issues would.
+
+findings:
+  - id: ACM-001
+    severity: S2
+    type: bug
+    title: "[overlays] DTC_DMAPacket packs the subsystem ID into the DTC-errors field, so Data Header packets do not round-trip"
+    issue: pending
+    fingerprint: ccbd3de4
+  - id: ACM-002
+    severity: S3
+    type: bug
+    title: "[overlays] fragment overlays parse event payloads with no buffer bound; header byte counts are trusted"
+    issue: pending
+    fingerprint: d5befae7
+  - id: ACM-003
+    severity: S3
+    type: enhancement
+    title: "[overlays] wire-layout bit-field structs rely on compiler bit allocation and a little-endian host, with no size/byte-order asserts or golden-byte tests"
+    issue: pending
+    fingerprint: 11221bcb
+  - id: ACM-004
+    severity: S3
+    type: bug
+    title: "[overlays] DTCEventFragment.hh and CFOEventFragment.hh share one include guard"
+    issue: pending
+    fingerprint: 90bc5125
+  - id: ACM-005
+    severity: S4
+    type: bug
+    title: "[headers] header hygiene: broken deprecated umbrella, non-self-contained headers, off-by-one guards, spec-divergent subsystem codes"
+    issue: pending
+    fingerprint: 19ebb664
+  - id: ACM-006
+    severity: S3
+    type: bug
+    title: "[submodules] .gitmodules points artdaq-core-mu2e at a personal fork with issues disabled"
+    issue: pending
+    fingerprint: 268897cf

@@ -14,7 +14,7 @@ summary: Mu2e artdaq fragment types, DTC and CFO packet overlays, subsystem payl
 |---|---|
 | Repository | `Mu2e/artdaq-core-mu2e` (superproject submodule URL: `normanajn/artdaq-core-mu2e`, a fork with issues disabled) |
 | Language | C++17, cetmodules/CMake, ROOT dictionaries |
-| Version | 9.02.00 (`CMakeLists.txt:13`) |
+| Version | 9.02.00 at the superproject pin `cf86c07` (`CMakeLists.txt:13`); upstream `Mu2e/artdaq-core-mu2e` `develop` is 9.07.00, 68 commits ahead |
 | Ports | none |
 | Depends on | `artdaq-core` ≥ 3.09.00, TRACE, messagefacility, canvas (art), ROOT, Boost.Test (all external to this superproject) |
 | Used by | `artdaq-mu2e`, `mu2e-pcie-utils`, every `otsdaq-mu2e*` art module, Mu2e Offline |
@@ -74,7 +74,8 @@ None. Build switches are environment variables read by CMake: `USE_ASAN`,
 
 Nothing runs. Quality gates: two Boost.Test programs (`test/Overlays/DTC_Event_t.cc`,
 `DTC_SubEvent_t.cc`; 8 test cases) parse good, short and long binary event
-and sub-event files; nine GitHub workflows call the shared `Mu2e/.github`
+and sub-event files; nine GitHub workflows at the pin (eight upstream, which
+dropped `auto_approve`) call the shared `Mu2e/.github`
 reusable workflows (build, test, format, tidy, whitespace, build-against-develop)
 plus issue/PR project tracking and an auto-approve. The build workflows'
 `paths-ignore: docs/**` does not match this repository's `doc/`, so
@@ -95,9 +96,16 @@ documentation-only commits trigger full builds.
 
 ## Review findings
 
-Seven findings staged in [ISSUES-PENDING.md](ISSUES-PENDING.md): two S2
-(subsystem ID does not round-trip through the packer; the event and
-sub-event parsers loop forever after a parse exception), four S3 (no buffer
-bound on parsing; unchecked bit-field layout and byte order with no
-golden-byte tests; a shared include guard; the superproject's submodule URL
-points at a personal fork) and one S4 header-hygiene rollup.
+Six findings are staged in [ISSUES-PENDING.md](ISSUES-PENDING.md), each
+re-checked against upstream `develop`:
+
+- one S2: the subsystem ID does not round-trip through the packer;
+- four S3: parsing has no buffer bound; bit-field layout and byte order are
+  unchecked and there are no golden-byte tests; two headers share an include
+  guard; the superproject pins a personal fork 68 commits behind upstream;
+- one S4 header-hygiene rollup.
+
+A fifth defect seen at the pin, the event and sub-event parsers looping
+forever after a parse exception, is already fixed upstream (5225ef0,
+8bf66e6). It is recorded as evidence that the pin is stale rather than filed
+on its own.

@@ -7,8 +7,18 @@ simulator) and Mu2e Offline — includes these headers and links
 `artdaq-core-mu2e::Overlays` or `artdaq-core-mu2e::Data`. A change of a field
 width or offset here is a wire-format change for all of them.
 
-Reviewed at `cf86c07` (version 9.02.00, `CMakeLists.txt:13`) under the
-mega-review Tier B rule: `CMakeLists.txt`, every header under `Data/` and
+**Baseline.** Line numbers are for `cf86c07` (version 9.02.00,
+`CMakeLists.txt:13`), the commit the superproject pins. It sits on the fork
+`normanajn/artdaq-core-mu2e` and is 68 commits behind (2 ahead of)
+`Mu2e/artdaq-core-mu2e` `develop`, which is 9.07.00 at `7ae4622`
+(2026-10-06). Every header was diffed against upstream `develop` with
+whitespace ignored. Upstream is mostly a clang-format pass. No layout in
+§2–§9 changed, apart from three semantic differences: `STMFragment` is
+rewritten (§7.1), the parse loops no longer spin (§5.3), and the JSON
+printers add hex values. Upstream also drops the `auto_approve` workflow and
+adds `.github/copilot-instructions.md`.
+
+Reviewed under the mega-review Tier B rule: `CMakeLists.txt`, every header under `Data/` and
 `Overlays/`, registration macros, `test/` and `.github/` file names. Where a
 header declares a pack/unpack function and does not itself define the bytes,
 only the few lines of that named function were read; those are cited as
@@ -84,7 +94,7 @@ decoded with the decoders of §8, not with a per-type overlay.
   do on x86-64: bit-fields allocated LSB-first within each 64-bit unit,
   little-endian host. The C++ standard leaves bit-field allocation
   implementation-defined and no header asserts the struct size or byte
-  order — see ACM-004.
+  order — see ACM-003.
 - Offsets are as **the header defines them**. Where the spec and the header
   disagree, both are shown.
 
@@ -188,7 +198,7 @@ layout: the tracker decoder upgrades V0 packets to the current layout
 
 The overlay therefore cannot name, or filter for, a TDAQ (7) data block.
 `mu2edaq-dataformat-viewer` follows the spec (its DFV-002). Recorded under
-ACM-006.
+ACM-005.
 
 ### 4.4 Heartbeat packet (type 1) — `DTC_HeartbeatPacket`
 
@@ -335,14 +345,18 @@ Two header-visible properties matter to every consumer:
 - **No buffer bound.** Neither constructor takes a size and `getData()` does
   not pass `dataSizeBytes()`; the walk is bounded only by the byte counts in
   the data. `DTC_DataBlock` guards its accessors with `assert`
-  (`DTC_DataBlock.h:55,63,68`), compiled out in release builds. ACM-003.
+  (`DTC_DataBlock.h:55,63,68`), compiled out in release builds. ACM-002.
 - **Retry without advance.** When the `DTC_SubEvent` constructor throws
   `DTC_WrongPacketTypeException` (format version ≠ 1), `SetupEvent` catches it
   and `continue`s with the same pointer and byte count
   (`DTC_Event.cpp:52-57`); when a `DTC_DataBlock` constructor throws inside
   `SetupSubEvent` (type ≠ 5, or `(packetCount+1)*16 ≠ byteCount`), both catch
   blocks fall through to the same loop condition (`DTC_SubEvent.cpp:107,113,201,240`).
-  Either loops forever. ACM-002.
+  Either loops forever at `cf86c07`. **Fixed upstream** by 5225ef0
+  (2026-09-21, `SetupEvent` now `break`s) and 8bf66e6 (2026-09-27, both
+  `SetupSubEvent` handlers now `break`); the upstream comment records a
+  2026-09-22 bench run of 254k identical passes and 1.5 GB of log. The
+  superproject still pins the unfixed commit — ACM-006.
 
 `DTC_Event::MAX_DMA_SIZE` is 0x8000 (`DTC_Event.h:32`).
 
@@ -373,7 +387,7 @@ following Mu2e-doc-19095 p. 22 per `Data/EventHeader.hh:8`:
 | 6 | 7:0 | `DR_marker_Nplus1_meas` |
 
 `record_format_version` is carried but nothing in the headers checks it, and
-the 56-byte copy does not consult the fragment size (ACM-003). Event mode is
+the 56-byte copy does not consult the fragment size (ACM-002). Event mode is
 48 bits here against 40 bits in the DTC headers.
 
 `CFO_DMAPacket`/`CFO_DataPacket` (`CFO_Packets/`) are reduced copies of the DTC
@@ -384,10 +398,21 @@ and `Invalid = 0x10`.
 
 ### 7.1 `STMFragment` — `STM` (`Overlays/STMFragment.hh:28-75`)
 
-An `int16_t` view of the payload with fixed offsets and an "STM-TODO" note
-that the layout is provisional (`:10-25`): `EvNum` at int16 index 8,
-`DataType` 22 (comment: assumed raw), `EvLen` 23, `detID` 28, data from 32.
-No version, no length check against `EvLen` or `dataSizeBytes()`.
+**At `cf86c07`:** an `int16_t` view of the payload with fixed offsets and an
+"STM-TODO" note that the layout is provisional (`:10-25`): `EvNum` at int16
+index 8, `DataType` 22 (comment: assumed raw), `EvLen` 23, `detID` 28, data
+from 32. No version, no length check.
+
+**On upstream `develop` (rewritten, 332 lines):** the dataset is carried in
+the Fragment ID (`stm::Dataset`: 100/101/102/103 = HPGe raw / zero-suppressed /
+pulse-height / container, 200–203 the same for LaBr). Raw data starts with a
+22-word `int16` header (`stm::RawHeader`): anchor `0xCAFE` at word 0 and 21,
+EWT in words 1–3, ADC clock 4–7, channel + DTC clock 8–11, event mode
+12–14 (word 14 bit 0 = on-spill), prescale 15, raw length 16, ZS region count
+17, ZS length 18, pulse-height count 19, data flags 20. Each zero-suppressed
+pulse has a 2-word header (raw index, pulse length). Payload size comes from
+`dataSizeBytes()`. This review documents the upstream layout from the header
+only and did not compare it with the STM firmware.
 
 ### 7.2 `TrkDtcFragment` — `TRKDTC` (`Overlays/TrkDtcFragment.hh:8-60`)
 
@@ -425,7 +450,7 @@ layout (`Upgrade`, `:285`).
 
 Followed by `NumADCPackets` × `TrackerADCPacket` (16 bytes, twelve 10-bit
 samples, `:197-278`). These are overlaid directly on the data (bit-field
-structs); see ACM-004.
+structs); see ACM-003.
 
 ### 8.2 Calorimeter — `CalorimeterDataDecoder.hh`
 
@@ -505,14 +530,14 @@ Offline.
 
 | Concern | Where | Assessment |
 |---|---|---|
-| Unchecked length fields | `DTC_Event`/`DTC_SubEvent` walk (§5.3), `CFO_Event` 56-byte copy, `STMFragment`, `DTC_DataBlock` asserts | ACM-003 |
-| Parse loop does not advance after an exception | `DTC_Event.cpp:52-57`, `DTC_SubEvent.cpp:201,240` | ACM-002 |
+| Unchecked length fields | `DTC_Event`/`DTC_SubEvent` walk (§5.3), `CFO_Event` 56-byte copy, `DTC_DataBlock` asserts; `STMFragment` at the pin only | ACM-002 |
+| Parse loop does not advance after an exception | `DTC_Event.cpp:52-57`, `DTC_SubEvent.cpp:201,240` at `cf86c07` | fixed upstream (5225ef0, 8bf66e6); pin lacks it — ACM-006 |
 | Pack/unpack asymmetry | subsystem ID, §4.6 | ACM-001 |
-| Type punning | bit-field structs overlaid with `reinterpret_cast` (`RocDataHeaderPacket_t`, tracker packets, `CRVHitRawFEBII`); `reinterpret_cast<const uint64_t*>` in `IsDataHeaderPacket` (`DTC_DataHeaderPacket.cpp:96`); event headers use `memcpy` (defined) | ACM-004 |
-| Endianness | every pack/unpack and overlay assumes a little-endian host; calorimeter payload is the one big-endian-word format and is handled explicitly | ACM-004 |
-| Bit-field allocation | implementation-defined; size `static_assert`s exist only for `CRVHitRawFEBII`, `MobileSyncPacket`, `DTCEventFragment::Metadata`, `TrkDtcFragment::Metadata` | ACM-004 |
-| Version handling | sub-event format: exactly 1, else throw; data-header version: per-decoder; CFO record version: unchecked; `DTCEVT`/`CFO` fragment `CURRENT_VERSION = 1` not compared on read; STM: none | §5.2, §6, ACM-003 |
-| Include guards | `DTCEventFragment.hh` and `CFOEventFragment.hh` share one guard | ACM-005 |
+| Type punning | bit-field structs overlaid with `reinterpret_cast` (`RocDataHeaderPacket_t`, tracker packets, `CRVHitRawFEBII`); `reinterpret_cast<const uint64_t*>` in `IsDataHeaderPacket` (`DTC_DataHeaderPacket.cpp:96`); event headers use `memcpy` (defined) | ACM-003 |
+| Endianness | every pack/unpack and overlay assumes a little-endian host; calorimeter payload is the one big-endian-word format and is handled explicitly | ACM-003 |
+| Bit-field allocation | implementation-defined; size `static_assert`s exist only for `CRVHitRawFEBII`, `MobileSyncPacket`, `DTCEventFragment::Metadata`, `TrkDtcFragment::Metadata` | ACM-003 |
+| Version handling | sub-event format: exactly 1, else throw; data-header version: per-decoder; CFO record version: unchecked; `DTCEVT`/`CFO` fragment `CURRENT_VERSION = 1` not compared on read; STM: none at the pin, dataset in Fragment ID upstream | §5.2, §6, ACM-002 |
+| Include guards | `DTCEventFragment.hh` and `CFOEventFragment.hh` share one guard | ACM-004 |
 
 ## 11. Independent encodings of these layouts
 
@@ -521,5 +546,5 @@ GUI decoder. Its review compared the YAML, the spec and these headers: the
 spec and the overlays agree on Data Header, Heartbeat and Data Request; the
 YAML disagrees on Heartbeat, Data Request and Debug Header layouts (its
 DFV-001) and on subsystem-ID labels (DFV-002). Nothing in either repository
-checks one encoding against the other. A golden-bytes test here (ACM-004)
+checks one encoding against the other. A golden-bytes test here (ACM-003)
 would give the YAML something to be checked against.
